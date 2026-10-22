@@ -43,6 +43,8 @@ public class DBConnection {
     private static synchronized void determineDatabaseSource() {
         if (isInitialized) return;
 
+        boolean mysqlConnected = false;
+
         // 1. Check for Cloud MySQL Environment Variables (Render, Railway, Aiven, etc.)
         String envDbUrl = System.getenv("DB_URL");
         if (envDbUrl == null) envDbUrl = System.getenv("MYSQL_URL");
@@ -72,34 +74,35 @@ public class DBConnection {
         }
 
         // 2. Try Local MySQL next
-        String[] candidatePasswords = {"root", "", "password", "admin", "123456"};
+        String[] candidatePasswords = {"1234", "root", "", "password", "admin", "123456"};
 
         if (!mysqlConnected) {
             try {
                 Class.forName(MYSQL_DRIVER);
-            for (String pass : candidatePasswords) {
-                try {
-                    // Try to connect to MySQL server root
-                    Connection conn = DriverManager.getConnection(MYSQL_SERVER_URL, "root", pass);
-                    Statement stmt = conn.createStatement();
-                    stmt.executeUpdate("CREATE DATABASE IF NOT EXISTS car_rental_db;");
-                    stmt.close();
-                    conn.close();
+                for (String pass : candidatePasswords) {
+                    try {
+                        // Try to connect to MySQL server root
+                        Connection conn = DriverManager.getConnection(MYSQL_SERVER_URL, "root", pass);
+                        Statement stmt = conn.createStatement();
+                        stmt.executeUpdate("CREATE DATABASE IF NOT EXISTS car_rental_db;");
+                        stmt.close();
+                        conn.close();
 
-                    // Successfully reached MySQL and created database!
-                    activeJdbcUrl = MYSQL_DB_URL;
-                    activeUser = "root";
-                    activePass = pass;
-                    activeDriver = MYSQL_DRIVER;
-                    mysqlConnected = true;
-                    System.out.println("✅ Connected to MySQL Database Server successfully using user 'root'!");
-                    break;
-                } catch (Exception ignored) {
-                    // Try next password
+                        // Successfully reached MySQL and created database!
+                        activeJdbcUrl = MYSQL_DB_URL;
+                        activeUser = "root";
+                        activePass = pass;
+                        activeDriver = MYSQL_DRIVER;
+                        mysqlConnected = true;
+                        System.out.println("✅ Connected to MySQL Database Server successfully using user 'root'!");
+                        break;
+                    } catch (Exception ignored) {
+                        // Try next password
+                    }
                 }
+            } catch (Exception e) {
+                // MySQL driver not found or general error
             }
-        } catch (Exception e) {
-            // MySQL driver not found or general error
         }
 
         if (!mysqlConnected) {
