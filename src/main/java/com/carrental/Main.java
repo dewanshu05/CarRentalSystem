@@ -75,13 +75,32 @@ public class Main {
         connector.setPort(port);
 
 
-        StandardContext ctx = (StandardContext) tomcat.addContext("/CarRentalSystem", webappDir.getAbsolutePath());
-        
-        // Use parent-first classloading so Servlets and JSPs share the exact same class instances
+        // Register application at both root "" (for cloud deployment root domain)
+        // and "/CarRentalSystem" (for backwards-compatible local URL path)
+        registerWebContext(tomcat, "", webappDir);
+        registerWebContext(tomcat, "/CarRentalSystem", webappDir);
+
+        tomcat.start();
+        System.out.println("==================================================================");
+        System.out.println("🚗 Car Rental Management System is ONLINE with Dual Role Portals!");
+        System.out.println("👉 Access URL: http://localhost:" + port + "/CarRentalSystem/");
+        System.out.println("👑 Owner / Admin Demo: admin / admin123");
+        System.out.println("🚗 Customer Demo:       aarav / customer123");
+        System.out.println("==================================================================");
+
+        tomcat.getServer().await();
+        // Keep alive indefinitely in background/daemon mode
+        while (true) {
+            try {
+                Thread.sleep(10000);
+            } catch (InterruptedException ignored) {}
+        }
+    }
+
+    private static StandardContext registerWebContext(Tomcat tomcat, String contextPath, File webappDir) {
+        StandardContext ctx = (StandardContext) tomcat.addContext(contextPath, webappDir.getAbsolutePath());
         ctx.setParentClassLoader(Main.class.getClassLoader());
         ctx.setDelegate(true);
-
-        // Welcome file (replaces web.xml welcome-file-list in embedded mode)
         ctx.addWelcomeFile("index.jsp");
         ctx.setSessionTimeout(30);
 
@@ -133,32 +152,6 @@ public class Main {
         rentServlet.setLoadOnStartup(3);
         ctx.addServletMappingDecoded("/rentals", "RentalServlet");
 
-        // Root redirect context: http://localhost:8080/ -> http://localhost:8080/CarRentalSystem/
-        Context rootCtx = tomcat.addContext("", new File(".").getAbsolutePath());
-        Tomcat.addServlet(rootCtx, "rootRedirect", new HttpServlet() {
-            private static final long serialVersionUID = 1L;
-            @Override
-            protected void doGet(HttpServletRequest req, HttpServletResponse resp)
-                    throws ServletException, IOException {
-                resp.sendRedirect("/CarRentalSystem/");
-            }
-        });
-        rootCtx.addServletMappingDecoded("/", "rootRedirect");
-
-        tomcat.start();
-        System.out.println("==================================================================");
-        System.out.println("🚗 Car Rental Management System is ONLINE with Dual Role Portals!");
-        System.out.println("👉 Access URL: http://localhost:" + port + "/CarRentalSystem/");
-        System.out.println("👑 Owner / Admin Demo: admin / admin123");
-        System.out.println("🚗 Customer Demo:       aarav / customer123");
-        System.out.println("==================================================================");
-
-        tomcat.getServer().await();
-        // Keep alive indefinitely in background/daemon mode
-        while (true) {
-            try {
-                Thread.sleep(10000);
-            } catch (InterruptedException ignored) {}
-        }
+        return ctx;
     }
 }

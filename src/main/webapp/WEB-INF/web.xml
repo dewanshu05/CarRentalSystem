@@ -53,6 +53,14 @@
         <servlet-name>CustomerPortalServlet</servlet-name>
         <url-pattern>/customer/book</url-pattern>
     </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>CustomerPortalServlet</servlet-name>
+        <url-pattern>/customer/edit-booking</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>CustomerPortalServlet</servlet-name>
+        <url-pattern>/customer/cancel-booking</url-pattern>
+    </servlet-mapping>
 
     <!-- Owner / Admin Servlets -->
     <servlet>
