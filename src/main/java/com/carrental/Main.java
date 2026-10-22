@@ -53,18 +53,11 @@ public class Main {
             } catch (Exception ignored) {}
         }
 
-        // Locate webapp directory - resolve absolute path from compiled class location
-        File projectRoot = new File(Main.class.getProtectionDomain().getCodeSource().getLocation().toURI())
-            .getParentFile() // classes
-            .getParentFile(); // target -> project root
-        File webappDir = new File(projectRoot, "src/main/webapp").getAbsoluteFile();
-        if (!webappDir.exists()) {
-            // fallback: try relative to current working directory
-            webappDir = new File("src/main/webapp").getAbsoluteFile();
-        }
-        if (!webappDir.exists()) {
-            webappDir = new File("CarRentalSystem/src/main/webapp").getAbsoluteFile();
-        }
+        // Locate webapp directory with multi-path resolution
+        File webappDir = findWebappDir();
+        File projectRoot = webappDir.getParentFile() != null && webappDir.getParentFile().getParentFile() != null 
+            ? webappDir.getParentFile().getParentFile() 
+            : new File(".").getAbsoluteFile();
         System.out.println("📁 Webapp directory: " + webappDir.getAbsolutePath() + " (exists: " + webappDir.exists() + ")");
 
         Tomcat tomcat = new Tomcat();
@@ -73,7 +66,6 @@ public class Main {
 
         Connector connector = tomcat.getConnector();
         connector.setPort(port);
-
 
         // Register application at both root "" (for cloud deployment root domain)
         // and "/CarRentalSystem" (for backwards-compatible local URL path)
@@ -97,6 +89,28 @@ public class Main {
         }
     }
 
+    private static File findWebappDir() {
+        File[] candidates = new File[] {
+            new File("src/main/webapp"),
+            new File("CarRentalSystem/src/main/webapp"),
+            new File("../src/main/webapp")
+        };
+        for (File c : candidates) {
+            if (c.exists() && new File(c, "css/style.css").exists()) {
+                return c.getAbsoluteFile();
+            }
+        }
+        try {
+            File codeSource = new File(Main.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            File root = codeSource.getParentFile().getParentFile();
+            File dir = new File(root, "src/main/webapp");
+            if (dir.exists() && new File(dir, "css/style.css").exists()) {
+                return dir.getAbsoluteFile();
+            }
+        } catch (Exception ignored) {}
+        return new File("src/main/webapp").getAbsoluteFile();
+    }
+
     private static StandardContext registerWebContext(Tomcat tomcat, String contextPath, File webappDir) {
         StandardContext ctx = (StandardContext) tomcat.addContext(contextPath, webappDir.getAbsolutePath());
         ctx.setParentClassLoader(Main.class.getClassLoader());
@@ -104,12 +118,30 @@ public class Main {
         ctx.addWelcomeFile("index.jsp");
         ctx.setSessionTimeout(30);
 
-        // 1. Register DefaultServlet for CSS, JS, images
+        // Explicit RFC MIME types so Chrome/Edge never block styles or scripts
+        ctx.addMimeMapping("css", "text/css");
+        ctx.addMimeMapping("js", "application/javascript");
+        ctx.addMimeMapping("svg", "image/svg+xml");
+        ctx.addMimeMapping("png", "image/png");
+        ctx.addMimeMapping("jpg", "image/jpeg");
+        ctx.addMimeMapping("jpeg", "image/jpeg");
+        ctx.addMimeMapping("gif", "image/gif");
+        ctx.addMimeMapping("ico", "image/x-icon");
+        ctx.addMimeMapping("json", "application/json");
+
+        // 1. Guaranteed Static Asset Servlet for CSS, JS, Images, Icons
+        Wrapper assetServlet = Tomcat.addServlet(ctx, "StaticAssetServlet", new com.carrental.controller.StaticAssetServlet(webappDir));
+        assetServlet.setLoadOnStartup(1);
+        ctx.addServletMappingDecoded("/css/*", "StaticAssetServlet");
+        ctx.addServletMappingDecoded("/js/*", "StaticAssetServlet");
+        ctx.addServletMappingDecoded("/images/*", "StaticAssetServlet");
+
+        // 2. Register DefaultServlet as fallback
         Wrapper defaultServlet = Tomcat.addServlet(ctx, "default", new DefaultServlet());
         defaultServlet.setLoadOnStartup(1);
         ctx.addServletMappingDecoded("/", "default");
 
-        // 2. Register JspServlet for JSP page rendering
+        // 3. Register JspServlet for JSP page rendering
         Wrapper jspServlet = Tomcat.addServlet(ctx, "jsp", new JspServlet());
         jspServlet.addInitParameter("fork", "false");
         jspServlet.addInitParameter("xpoweredBy", "false");
